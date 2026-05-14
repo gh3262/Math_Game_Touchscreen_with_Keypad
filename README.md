@@ -22,3 +22,34 @@ In addition to the three problem types I added "Mixed" which would pull from all
 Although we start with two names pre-programmed (these are on text files on the SD card), there is functionality to add additional names to the box so everyone can have their own scores. For this we created an on-screen keyboard which is a grid of 4x4. The top row are buttons for "LAST" [page], "BkSp", "ENTER", and "NEXT" [page]. The second row are the vowels A, E, I and O. These top two rows are constant. The consents, U and a space (underscore) are arranged on three pages. With this it is efficient to enter names without a lot of paging. 
 
 The keypad entry page is a similar grid 4x3 with buttons for 1, 2, 3, BkSp; 4, 5, 6 Enter; 7, 8, 9, 0. Becasue the screen is wider than tall I thought this would be a better arrangement rather than a traditional 3x4 arrangement. 
+
+<b>Project Structure</b>
+
+Top-level application files:
+- code.py: Main runtime entry point. Initializes hardware, display pages, fonts, touch input, buzzer/LED feedback, and orchestrates UI/game flow.
+- game_engine.py: Reducer/state-transition logic for mode selection, gameplay events, and intent routing.
+- logic_core.py: Pure game logic such as problem generation, score parsing, and score calculations.
+- adapters.py: Small adapter layer for display rendering, touch input abstraction, and persistence helpers.
+- settings.toml: CircuitPython settings and configuration values used at boot/runtime.
+
+Support and test files:
+- codeboardtest.py: Board-level test script for hardware validation.
+- codesdtest.py: SD card focused test script.
+
+Data and assets:
+- files/: Runtime text data files (players and scores), including default seeded data.
+	- players.txt: Player roster.
+	- scores.txt: Historical score entries.
+	- tplayers.txt: Additional/testing player data file.
+- fonts/: Bitmap font assets used by the UI (only a subset are actively loaded by code.py).
+
+Reference and libraries:
+- info/: Documentation and sample/reference material used during development.
+- lib/: CircuitPython libraries and local modules bundled with the project (including touchscreen support code).
+
+Runtime architecture summary:
+- The app keeps game rules and state transitions separate from hardware concerns.
+- code.py drives the event loop and presentation layer.
+- game_engine.py decides what should happen next.
+- logic_core.py computes math content and score values.
+- adapters.py isolates hardware/file access details for cleaner main flow.
