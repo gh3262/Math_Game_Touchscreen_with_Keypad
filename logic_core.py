@@ -95,6 +95,8 @@ def parse_score_line(line):
             timestamp_text = parts[6]
         if len(parts) >= 8:
             entry_mode = parts[7].lower()
+            if entry_mode not in ("mc", "kb", "tt"):
+                entry_mode = "mc"
         return {
             "player": parts[0],
             "type": parts[1],

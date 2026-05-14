@@ -147,10 +147,16 @@ def handle_mode_select_event(state, event_type, value=None, selectable_player_na
         return _event_result(action, next_state)
 
     if event_type == "entry_type_choice":
-        if value not in ("Choice", "Keys"):
+        if value not in ("Choice", "Keys", "TT"):
             return _event_result("ignore", next_state)
 
         next_state["selecting_entry_type"] = False
+        if value == "TT":
+            next_state["current_operator_symbol"] = "*"
+            next_state["current_game_type"] = "Multiplication"
+            next_state["selecting_problem_count"] = False
+            next_state["selecting_score_name"] = False
+            return _event_result("start_game", next_state, {"entry_type": value})
         return _event_result("show_problem_type_choices", next_state, {"entry_type": value})
 
     if event_type == "problem_type_choice":

@@ -130,9 +130,11 @@ SCORE_TYPE_LABEL = {
 TOUCH_DEBOUNCE_PRESS_COUNT = 2
 TOUCH_RELEASE_IDLE_COUNT = 2
 
-# --- Entry type points (magic numbers) ---
+# --- Entry type points ---
 POINTS_PER_MC_PROBLEM = 0.01
 POINTS_PER_KB_PROBLEM = 0.025
+POINTS_PER_TT_PROBLEM = 0.02
+TT_SCOPE = 12
 
 # Named color palette for all game UI elements.
 UI_COLORS = {
@@ -248,7 +250,7 @@ KB_KEYPAD_BUTTON_HEIGHT = (
 ) // KB_KEYPAD_ROWS
 KB_CORRECT_PAUSE_SECONDS = 0.5
 KB_WRONG_PAUSE_SECONDS = 1.0
-KB_ENTRY_MAX_DIGITS = 3
+KB_ENTRY_MAX_DIGITS = 4
 
 
 def debug_i2c_scan(i2c_bus):
@@ -301,6 +303,15 @@ def build_problem_set(operator, count=None):
 
 def tag_problem_set(problem_set, operator_symbol):
 	return logic_core.tag_problem_set(problem_set, operator_symbol)
+
+
+def build_tt_problem_set(table_number, scope):
+	problems = []
+	for multiplier in range(scope + 1):
+		correct_answer = table_number * multiplier
+		# Keep tuple shape consistent with normal problem sets.
+		problems.append((table_number, multiplier, correct_answer, correct_answer + 1, correct_answer + 2, correct_answer + 3))
+	return problems
 
 def touch_to_pixel(raw_x, raw_y):
 	"""Map normalized XPT2046 coordinates to display pixels."""
@@ -1937,8 +1948,12 @@ def append_score_entry(score_entry):
 	# Determine entry mode: 'mc' for multiple choice, 'kb' for keyboard
 	entry_mode = "mc"
 	if "entry_type" in score_entry:
-		if score_entry["entry_type"].lower().startswith("k"):  # "Keys" or "Keyboard"
+		entry_type = score_entry["entry_type"].lower()
+		if entry_type == "tt":
+			entry_mode = "tt"
+		elif entry_type.startswith("k"):
 			entry_mode = "kb"
+	score_entry["entry_mode"] = entry_mode
 	line = "{}, {}, {}, {}, {:.3f}, {:.3f}%, {}, {}\n".format(
 		score_entry["player"],
 		score_entry["type"],
@@ -2073,7 +2088,9 @@ def player_totals_lines(limit=TOP_SCORE_PAGE_LIMIT):
 			}
 		player_totals[player_name]["games"] += 1
 		player_totals[player_name]["problems"] += n_problems
-		if entry_mode == "kb":
+		if entry_mode == "tt":
+			player_totals[player_name]["points"] += n_problems * POINTS_PER_TT_PROBLEM
+		elif entry_mode == "kb":
 			player_totals[player_name]["points"] += n_problems * POINTS_PER_KB_PROBLEM
 		else:
 			player_totals[player_name]["points"] += n_problems * POINTS_PER_MC_PROBLEM
@@ -2176,7 +2193,9 @@ def player_recent_totals_lines(limit=TOP_SCORE_PAGE_LIMIT):
 			}
 		player_totals[player_name]["games"] += 1
 		player_totals[player_name]["problems"] += n_problems
-		if entry_mode == "kb":
+		if entry_mode == "tt":
+			player_totals[player_name]["points"] += n_problems * POINTS_PER_TT_PROBLEM
+		elif entry_mode == "kb":
 			player_totals[player_name]["points"] += n_problems * POINTS_PER_KB_PROBLEM
 		else:
 			player_totals[player_name]["points"] += n_problems * POINTS_PER_MC_PROBLEM
@@ -2436,7 +2455,7 @@ def show_entry_type_choices():
 	set_label_text_if_changed(result_label, "")
 	set_button_text(answer_buttons[0], "Choice")
 	set_button_text(answer_buttons[1], "Keys")
-	set_button_text(answer_buttons[2], "")
+	set_button_text(answer_buttons[2], "TT")
 	set_button_text(answer_buttons[3], "")
 	reset_button_colors()
 
@@ -2467,6 +2486,7 @@ def build_current_game_entry(elapsed_seconds):
 	current_entry = {
 		"player": current_player_name,
 		"type": current_game_type,
+		"entry_type": current_entry_type,
 		"nbr_q": len(question_order),
 		"nbr_skipped": total_skipped,
 		"avg_time": average_time_seconds(elapsed_seconds),
@@ -2616,7 +2636,10 @@ def clear_kb_entry():
 
 def append_kb_digit(digit_text):
 	global kb_answer_text
-	if len(kb_answer_text) >= KB_ENTRY_MAX_DIGITS:
+	max_digits = KB_ENTRY_MAX_DIGITS
+	if current_entry_type == "TT" and tt_selected_number is None:
+		max_digits = 2
+	if len(kb_answer_text) >= max_digits:
 		return
 	kb_answer_text += digit_text
 	refresh_kb_entry_label()
@@ -2636,9 +2659,16 @@ def reset_button_colors():
 
 def show_current_problem():
 	global current_correct_answer
+	if current_entry_type == "TT" and tt_selected_number is None:
+		set_label_text_if_changed(game_kb_question_label, "TT Number?")
+		set_label_text_if_changed(game_kb_result_label, "Enter 0-99 then Enter")
+		clear_kb_entry()
+		current_correct_answer = None
+		reset_button_colors()
+		return
 	problem = active_questions[question_order[current_problem_position]]
 	problem_line = problem_text(problem)
-	if current_entry_type == "Keys":
+	if current_entry_type in ("Keys", "TT"):
 		set_label_text_if_changed(game_kb_question_label, problem_line)
 		set_label_text_if_changed(game_kb_result_label, "")
 		clear_kb_entry()
@@ -2646,12 +2676,12 @@ def show_current_problem():
 		set_label_text_if_changed(question_label, problem_line)
 	current_correct_answer = problem[2]
 	reset_button_colors()
-	if current_entry_type != "Keys":
+	if current_entry_type not in ("Keys", "TT"):
 		set_answer_choices(problem)
 
 
 def handle_kb_submit_answer():
-	global total_attempts, total_correct, current_problem_position
+	global total_attempts, total_correct, current_problem_position, active_questions, tt_selected_number
 	if not kb_answer_text:
 		refresh_kb_entry_label()
 		return False
@@ -2661,6 +2691,21 @@ def handle_kb_submit_answer():
 	except ValueError:
 		clear_kb_entry()
 		return False
+
+	if current_entry_type == "TT" and tt_selected_number is None:
+		if chosen_value < 0 or chosen_value > 99:
+			set_label_text_if_changed(game_kb_result_label, "Use 0-99")
+			clear_kb_entry()
+			return False
+		tt_selected_number = chosen_value
+		active_questions = build_tt_problem_set(tt_selected_number, TT_SCOPE)
+		question_order[:] = list(range(len(active_questions)))
+		current_problem_position = 0
+		reset_game_timer()
+		reset_score_counters()
+		set_label_text_if_changed(game_kb_result_label, "")
+		show_current_problem()
+		return True
 
 	total_attempts += 1
 	if chosen_value == current_correct_answer:
@@ -2687,7 +2732,7 @@ def handle_kb_submit_answer():
 
 
 def handle_kb_entry_press(pressed):
-	if current_entry_type != "Keys":
+	if current_entry_type not in ("Keys", "TT"):
 		return False
 	button_text = pressed["label"].text
 	if not button_text:
@@ -2722,11 +2767,16 @@ def end_game(message="Game Over"):
 
 
 def start_game():
-	global game_started, current_problem_position, mode_select_active, selecting_problem_count, active_questions
-	if current_entry_type == "Keys":
+	global game_started, current_problem_position, mode_select_active, selecting_problem_count, active_questions, tt_selected_number
+	if current_entry_type in ("Keys", "TT"):
 		show_game_kb_page()
 	else:
 		show_game_page()
+	if current_entry_type == "TT":
+		set_label_text_if_changed(title_label, "Times Tables")
+		current_problem_position = 0
+		tt_selected_number = None
+		active_questions = []
 	if current_game_type == "Mixed":
 		selected_questions = []
 		max_mixed_questions = len(addition_mixed) + len(subtraction_mixed) + len(multiplication_mixed)
@@ -2742,7 +2792,7 @@ def start_game():
 		shuffle_in_place(selected_questions)
 		active_questions = selected_questions
 
-	if not active_questions:
+	if current_entry_type != "TT" and not active_questions:
 		end_game("No problems")
 		return
 	game_started = True
@@ -2751,8 +2801,11 @@ def start_game():
 	set_label_text_if_changed(result_label, "")
 	reset_game_timer()
 	reset_score_counters()
-	question_count = min(problem_count_target, len(active_questions))
-	question_order[:] = random_index_order(len(active_questions), question_count)
+	if current_entry_type == "TT":
+		question_order[:] = []
+	else:
+		question_count = min(problem_count_target, len(active_questions))
+		question_order[:] = random_index_order(len(active_questions), question_count)
 	current_problem_position = 0
 	set_button_text(quit_button, "Quit")
 	set_button_text(next_button, "Next")
@@ -2805,7 +2858,7 @@ def show_problem_count_choices():
 	clear_top_score_labels()
 	set_button_text(quit_button, "Start")
 	set_button_text(next_button, "Next")
-	set_label_text_if_changed(question_label, "Nbr Problems?")
+	set_label_text_if_changed(question_label, "Number Problems?")
 	set_label_text_if_changed(result_label, "")
 	set_button_text(answer_buttons[0], "10")
 	set_button_text(answer_buttons[1], "20")
@@ -2815,7 +2868,7 @@ def show_problem_count_choices():
 
 
 def show_title_screen(reset_title=True):
-	global game_started, mode_select_active, selecting_entry_type, selecting_problem_count, selecting_score_name, post_score_status_active, post_score_page_index, post_score_player_name, post_score_current_entry, current_player_name, current_entry_type, kb_answer_text, manual_name_value, name_entry_letter_page, name_entry_message, start_screen_top_scores_active, start_screen_top_score_index
+	global game_started, mode_select_active, selecting_entry_type, selecting_problem_count, selecting_score_name, post_score_status_active, post_score_page_index, post_score_player_name, post_score_current_entry, current_player_name, current_entry_type, kb_answer_text, manual_name_value, name_entry_letter_page, name_entry_message, start_screen_top_scores_active, start_screen_top_score_index, tt_selected_number
 	show_game_page()
 	game_started = False
 	mode_select_active = False
@@ -2830,6 +2883,7 @@ def show_title_screen(reset_title=True):
 	post_score_current_entry = None
 	current_player_name = ""
 	current_entry_type = "Choice"
+	tt_selected_number = None
 	kb_answer_text = ""
 	manual_name_value = ""
 	name_entry_letter_page = 0
@@ -3069,6 +3123,9 @@ def handle_next_press():
 		debug_helper_transition("next -> advance start top scores page")
 		return handle_next_intent(reducer_result["intent"], reducer_result.get("data"))
 	if game_started:
+		if current_entry_type == "TT" and tt_selected_number is None:
+			set_label_text_if_changed(game_kb_result_label, "Pick TT number first")
+			return False
 		reducer_result = game_engine.handle_gameplay_event(
 			current_gameplay_state(),
 			"next_pressed_in_game",
@@ -3114,10 +3171,20 @@ def handle_name_entry_press(pressed):
 
 
 def handle_mode_select_answer_intent(intent, choice_text):
-	global current_entry_type
+	global current_entry_type, active_questions, current_operator_symbol, current_game_type, selecting_entry_type, selecting_problem_count, selecting_score_name, problem_count_target
 	if intent == "choose_entry_type":
 		debug_helper_transition("mode_select answer -> choose entry type {}".format(choice_text))
 		current_entry_type = choice_text
+		if choice_text == "TT":
+			active_questions = multiplication
+			current_operator_symbol = "*"
+			current_game_type = "Multiplication"
+			selecting_entry_type = False
+			selecting_problem_count = False
+			selecting_score_name = False
+			problem_count_target = TT_SCOPE + 1
+			start_game()
+			return True
 		show_problem_type_choices()
 		return True
 	if intent == "choose_player_name":
@@ -3328,6 +3395,7 @@ current_operator_symbol = "+"
 current_game_type = "Addition"
 current_entry_type = "Choice"
 kb_answer_text = ""
+tt_selected_number = None
 problem_count_target = 10
 question_order = []
 current_problem_position = 0

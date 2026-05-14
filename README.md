@@ -19,7 +19,7 @@ This project was initially designed on an Adafruit TFT Touchscreen FeatherWing. 
 - 3D-printed case with heat-set brass inserts and screws
 
 <b>Basic Design</b>
-The original design generated random problems using digits 0 to 12 and gave the player four multiple-choice options. The logic generated three incorrect answers close to the real answer, so the correct answer wasn't obvious from the choices. A later iteration of the game added a second mode for keypad entry: rather than multiple-choice selection, the player had to key in the correct answer with an on-screen keypad.
+The original design generated random problems using digits 0 to 12 and gave the player four multiple-choice options. The logic generated three incorrect answers close to the real answer, so the correct answer wasn't obvious from the choices. A later iteration of the game added a second mode for keypad entry: rather than multiple-choice selection, the player had to key in the correct answer with an on-screen keypad. The next iteration added a Times Table (TT) mode. These are multiplication problems for a chosen number times 0 to 12.
 
 For each problem, the player must answer correctly. If they are incorrect, they have to keep trying until they enter the correct answer. Players can also skip questions by touching the Next button.
 
@@ -33,9 +33,9 @@ The keypad entry page is a similar 4x3 grid with buttons for 1, 2, 3, BkSp; 4, 5
 
 <b>Scoring:</b> At the end of each game, the player sees several screens. The first screen is their score for the game. It shows the number of problems, number skipped, and number wrong. They are given an accuracy score and an average time per question. The program also calculates a composite score weighted 70% accuracy / 30% time (weightings can be adjusted at the top of the program). If they achieve a high score for the category (or tie), the screen will indicate it. The Next button moves to the Ranking screen, showing the player's ranking in each category (and who has the high score in the category). The next page shows the top ten scores in the category, including the name and date/time achieved. Next returns to the Start screen, and the player can bypass these screens and start a new game at any time with the Start button.
 
-When on the Start screen, before a game is started, clicking the Next button cycles through the four Top Ten score pages for each category. The fifth and sixth pages list each player, the number of games/problems recorded, and a calculated point total. Points are given as 0.01 per multiple-choice question and 0.025 per keypad-entry answer. Point values are set at the top of the program.
+When on the Start screen, before a game is started, clicking the Next button cycles through the four Top Ten score pages for each category. The fifth and sixth pages list each player, the number of games/problems recorded, and a calculated point total. Points are given as 0.01 per multiple-choice question, 0.025 per keypad-entry answer, and 0.02 per TT question. Point values are set at the top of the program.
 
-For the most part, I used libraries and drivers from the Adafruit bundle; however, they don't have one for the touch controller, and there isn't one in the Community Bundle either. I did find a library, <i>xpt2046_circuitpython</i>, but I had to make a few changes to get it to run. The original library source is in the info folder. The updated library files used by this project are in the lib folder.
+For the most part, I used libraries and drivers from the Adafruit bundle; however, they don't have one for the touch controller, and there isn't one in the community bundle either. I did find a library, <i>xpt2046_circuitpython</i>, but I had to make a few changes to get it to run. The original library source is in the info folder. The updated library files used by this project are in the lib folder.
 
 <b>Project Structure</b>
 
@@ -48,7 +48,7 @@ Top-level application files:
 
 Support and test files:
 - codeboardtest.py: Board-level test script for hardware validation.
-- codesdtest.py: SD card focused test script.
+- codesdtest.py: SD-card-focused test script.
 
 Data and assets:
 - files/: Runtime text data files (players and scores), including default seeded data. This repo includes sample files with placeholder names. The <i>tplayers.txt</i> file is a template to start from scratch; replace the placeholders with the actual names that should be available each time the game is reset.
