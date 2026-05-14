@@ -113,7 +113,7 @@ NAME_ENTRY_LETTER_PAGES = (
 	(("L", "M", "N", "P"), ("Q", "R", "S", "T")),
 	(("U", "V", "W", "X"), ("Y", "Z", "_", "")),
 )
-DEBUG_FLOW = True
+DEBUG_FLOW = False
 DEBUG_HELPER_TRANSITIONS = False
 DEBUG_RUNTIME_SNAPSHOT_INTERVAL = 2.0
 RTC_TYPE = "ds3231"  # Set to "pcf8523" or "ds3231" to match the installed RTC chip
