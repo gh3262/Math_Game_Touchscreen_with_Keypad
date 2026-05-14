@@ -90,8 +90,11 @@ def parse_score_line(line):
     try:
         pct_text = parts[5].replace("%", "")
         timestamp_text = ""
+        entry_mode = "mc"  # Default for legacy lines
         if len(parts) >= 7:
             timestamp_text = parts[6]
+        if len(parts) >= 8:
+            entry_mode = parts[7].lower()
         return {
             "player": parts[0],
             "type": parts[1],
@@ -100,6 +103,7 @@ def parse_score_line(line):
             "avg_time": float(parts[4]),
             "pct_correct": float(pct_text),
             "timestamp": timestamp_text,
+            "entry_mode": entry_mode,
         }
     except (ValueError, IndexError):
         return None

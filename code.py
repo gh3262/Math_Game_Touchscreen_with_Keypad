@@ -130,6 +130,10 @@ SCORE_TYPE_LABEL = {
 TOUCH_DEBOUNCE_PRESS_COUNT = 2
 TOUCH_RELEASE_IDLE_COUNT = 2
 
+# --- Entry type points (magic numbers) ---
+POINTS_PER_MC_PROBLEM = 0.01
+POINTS_PER_KB_PROBLEM = 0.025
+
 # Named color palette for all game UI elements.
 UI_COLORS = {
 	"background": 0x777777,
@@ -1930,7 +1934,12 @@ def append_score_entry(score_entry):
 		return False
 	timestamp_text = format_score_timestamp(system_rtc.datetime)
 	score_entry["timestamp"] = timestamp_text
-	line = "{}, {}, {}, {}, {:.3f}, {:.3f}%, {}\n".format(
+	# Determine entry mode: 'mc' for multiple choice, 'kb' for keyboard
+	entry_mode = "mc"
+	if "entry_type" in score_entry:
+		if score_entry["entry_type"].lower().startswith("k"):  # "Keys" or "Keyboard"
+			entry_mode = "kb"
+	line = "{}, {}, {}, {}, {:.3f}, {:.3f}%, {}, {}\n".format(
 		score_entry["player"],
 		score_entry["type"],
 		score_entry["nbr_q"],
@@ -1938,6 +1947,7 @@ def append_score_entry(score_entry):
 		score_entry["avg_time"],
 		score_entry["pct_correct"],
 		timestamp_text,
+		entry_mode,
 	)
 	try:
 		with open_text_append(SCORE_FILE_PATH) as score_file:
@@ -2053,13 +2063,20 @@ def player_totals_lines(limit=TOP_SCORE_PAGE_LIMIT):
 	player_totals = {}
 	for entry in entries:
 		player_name = entry["player"]
+		entry_mode = entry.get("entry_mode", "mc")
+		n_problems = entry["nbr_q"] - entry["nbr_skipped"]
 		if player_name not in player_totals:
 			player_totals[player_name] = {
 				"games": 0,
 				"problems": 0,
+				"points": 0.0,
 			}
 		player_totals[player_name]["games"] += 1
-		player_totals[player_name]["problems"] += entry["nbr_q"] - entry["nbr_skipped"]
+		player_totals[player_name]["problems"] += n_problems
+		if entry_mode == "kb":
+			player_totals[player_name]["points"] += n_problems * POINTS_PER_KB_PROBLEM
+		else:
+			player_totals[player_name]["points"] += n_problems * POINTS_PER_MC_PROBLEM
 
 	ordered_names = list(player_totals.keys())
 	ordered_names.sort(
@@ -2076,15 +2093,17 @@ def player_totals_lines(limit=TOP_SCORE_PAGE_LIMIT):
 		name = ordered_names[i]
 		games_played = player_totals[name]["games"]
 		problems_played = player_totals[name]["problems"]
+		points = player_totals[name]["points"]
 		game_word = "Game" if games_played == 1 else "Games"
 		problem_word = "Problem" if problems_played == 1 else "Problems"
 		lines.append(
-			"{}: {} {} - {} {}".format(
+			"{}: {} {} - {} {}  Pts: {:.2f}".format(
 				name[:8],
 				games_played,
 				game_word,
 				problems_played,
 				problem_word,
+				points,
 			)
 		)
 	return lines
@@ -2147,14 +2166,20 @@ def player_recent_totals_lines(limit=TOP_SCORE_PAGE_LIMIT):
 			continue
 
 		player_name = entry["player"]
+		entry_mode = entry.get("entry_mode", "mc")
+		n_problems = entry["nbr_q"] - entry["nbr_skipped"]
 		if player_name not in player_totals:
 			player_totals[player_name] = {
 				"games": 0,
 				"problems": 0,
+				"points": 0.0,
 			}
-
 		player_totals[player_name]["games"] += 1
-		player_totals[player_name]["problems"] += entry["nbr_q"] - entry["nbr_skipped"]
+		player_totals[player_name]["problems"] += n_problems
+		if entry_mode == "kb":
+			player_totals[player_name]["points"] += n_problems * POINTS_PER_KB_PROBLEM
+		else:
+			player_totals[player_name]["points"] += n_problems * POINTS_PER_MC_PROBLEM
 
 	if len(player_totals) == 0:
 		return ["No scores for today/yesterday"]
@@ -2174,15 +2199,17 @@ def player_recent_totals_lines(limit=TOP_SCORE_PAGE_LIMIT):
 		name = ordered_names[i]
 		games_played = player_totals[name]["games"]
 		problems_played = player_totals[name]["problems"]
+		points = player_totals[name]["points"]
 		game_word = "Game" if games_played == 1 else "Games"
 		problem_word = "Problem" if problems_played == 1 else "Problems"
 		lines.append(
-			"{}: {} {} - {} {}".format(
+			"{}: {} {} - {} {}  Pts: {:.2f}".format(
 				name[:8],
 				games_played,
 				game_word,
 				problems_played,
 				problem_word,
+				points,
 			)
 		)
 	return lines
@@ -3078,6 +3105,7 @@ def handle_next_press():
 def handle_name_entry_press(pressed):
 	choice_text = pressed["label"].text
 	if choice_text:
+		play_buzzer_pattern(((BUZZER_DIGIT_FREQUENCY, BUZZER_DIGIT_DURATION),))
 		debug_helper_transition("name_entry -> {}".format(choice_text))
 		starting_page = current_page_name
 		handle_name_entry_choice(choice_text)

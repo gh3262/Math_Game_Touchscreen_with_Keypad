@@ -1,10 +1,10 @@
 # Math Game Touchscreen with Keypad
-AI-assisted CircuitPython project with a Feather RP2350 and touchscreen as a fun way to help students practice basic math problems.
+An AI-assisted CircuitPython project with a Feather RP2350 and touchscreen as a fun way to help students practice basic math problems.
 
 <b>Introduction</b>
-I wanted to make my grandchildren a "game box" that is educational and single-purpose. Rather than an app on a phone or a tablet (I'm sure there are a lot), I wanted this to only do one thing: math drills, so there would be less distraction from other things. The basic premise of the project is to generate random math questions (addition, subtraction, and multiplication) and let them practice. Like a game, it tracks the player's name and keeps a list of high scores. It also tracks how many correctly answered questions each player has achieved over time, which lets me bribe them by paying a small amount for every x number of questions.
+I wanted to make my grandchildren a "game box" that is educational and single-purpose. Rather than an app on a phone or tablet (I'm sure there are many), I wanted this to do only one thing: math drills, so there would be less distraction from other activities. The basic premise of the project is to generate random math questions (addition, subtraction, and multiplication) and let them practice. Like a game, it tracks each player's name and keeps a list of high scores. It also tracks how many questions each player has answered correctly over time, which lets me bribe them by paying a small amount for every set number of questions.
 
-Written in CircuitPython, I use VS Code for my IDE and Copilot AI (letting it choose the actual agent). Honestly, the AI does most of the heavy lifting. It really does a great job taking my concepts entered in chat and writing efficient code. As the program grew from a simple approach into a more complex one, we stopped along the way and optimized the structure, breaking it out into separate modules and trying to make it straightforward to change the hardware.
+Written in CircuitPython, I use VS Code as my IDE and Copilot AI (letting it choose the actual agent). Honestly, the AI does most of the heavy lifting. It does a great job taking the concepts I enter in chat and writing efficient code. As the program grew from a simple approach into a more complex one, we stopped along the way and optimized the structure, breaking it out into separate modules and making it straightforward to change the hardware.
 
 <b>Hardware</b>
 This project was initially designed on an Adafruit TFT Touchscreen FeatherWing. I later redesigned it to run on generic TFT touchscreens from Amazon for cost and size considerations. This code is written for those screens.
@@ -21,15 +21,21 @@ This project was initially designed on an Adafruit TFT Touchscreen FeatherWing. 
 <b>Basic Design</b>
 The original design generated random problems using digits 0 to 12 and gave the player four multiple-choice options. The logic generated three incorrect answers close to the real answer, so the correct answer wasn't obvious from the choices. A later iteration of the game added a second mode for keypad entry: rather than multiple-choice selection, the player had to key in the correct answer with an on-screen keypad.
 
+For each problem, the player must answer correctly. If they are incorrect, they have to keep trying until they enter the correct answer. Players can also skip questions by touching the Next button.
+
 In addition to the three problem types, I added "Mixed," which pulls from all question banks. Players have a choice of 10, 20, 35, or 50 questions.
 
-Although we start with two names pre-programmed (these are in text files on the SD card), there is functionality to add additional names to the box so everyone can have their own scores. For this, we created an on-screen keyboard that is arranged as a 4x4 grid. The top row has buttons for "LAST" [page], "BkSp", "ENTER", and "NEXT" [page]. The second row has the vowels A, E, I, and O. These top two rows are constant. The consonants, U, and a space (underscore) are arranged on three pages. With this layout, it is efficient to enter names without a lot of paging.
+Although we start with two pre-programmed names (stored in text files on the SD card), there is functionality to add additional names so everyone can have their own scores. For this, we created an on-screen keyboard arranged as a 4x4 grid. The top row has buttons for "LAST" [page], "BkSp", "ENTER", and "NEXT" [page]. The second row has the vowels A, E, I, and O. These top two rows are constant. The consonants, U, and a space (underscore) are arranged on three pages. With this layout, it is efficient to enter names without a lot of paging.
 
 Note that there is also a <i>secret</i> reset process to zero out the high scores and the game/problem counts. I added this so players would not get discouraged after the game fills up with high scores. If you choose "NEW" to create a new name and enter the name "RESET", the scores.txt file will be archived on the SD card with a date/time stamp, and the players.txt file will be replaced with the tplayers.txt file.
 
 The keypad entry page is a similar 4x3 grid with buttons for 1, 2, 3, BkSp; 4, 5, 6, Enter; 7, 8, 9, 0. Because the screen is wider than tall, I thought this would be a better arrangement than a traditional 3x4 layout.
 
-For the most part I used libraries and drivers from the Adafruit bundle; however, they don't have one for the touch controller, and there isn't one in the Community Bundle either. I did find a library, <i>xpt2046_circuitpython</i>, but I had to make a few changes to get it to run. The original library source is in the info folder. The updated library files used by this project are in the lib folder.
+<b>Scoring:</b> At the end of each game, the player sees several screens. The first screen is their score for the game. It shows the number of problems, number skipped, and number wrong. They are given an accuracy score and an average time per question. The program also calculates a composite score weighted 70% accuracy / 30% time (weightings can be adjusted at the top of the program). If they achieve a high score for the category (or tie), the screen will indicate it. The Next button moves to the Ranking screen, showing the player's ranking in each category (and who has the high score in the category). The next page shows the top ten scores in the category, including the name and date/time achieved. Next returns to the Start screen, and the player can bypass these screens and start a new game at any time with the Start button.
+
+When on the Start screen, before a game is started, clicking the Next button cycles through the four Top Ten score pages for each category. The fifth and sixth pages list each player, the number of games/problems recorded, and a calculated point total. Points are given as 0.01 per multiple-choice question and 0.025 per keypad-entry answer. Point values are set at the top of the program.
+
+For the most part, I used libraries and drivers from the Adafruit bundle; however, they don't have one for the touch controller, and there isn't one in the Community Bundle either. I did find a library, <i>xpt2046_circuitpython</i>, but I had to make a few changes to get it to run. The original library source is in the info folder. The updated library files used by this project are in the lib folder.
 
 <b>Project Structure</b>
 
@@ -66,7 +72,7 @@ Runtime architecture summary:
 
 1. Install CircuitPython on your Feather RP2350.
 2. Connect the board over USB and open the CIRCUITPY drive.
-3. Copy project files/folders to CIRCUITPY:
+3. Copy the project files/folders to CIRCUITPY:
 	- code.py
 	- adapters.py
 	- game_engine.py
@@ -74,7 +80,7 @@ Runtime architecture summary:
 	- settings.toml
 	- lib/ (required libraries)
 	- fonts/ (font assets)
-4. Insert an SD or microSD card and ensure data files are available:
+4. Insert an SD or microSD card and ensure the data files are available:
 	- files/players.txt
 	- files/scores.txt
 	- files/tplayers.txt
