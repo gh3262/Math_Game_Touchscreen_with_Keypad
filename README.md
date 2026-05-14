@@ -9,7 +9,7 @@ Written in CircuitPython, I use VS Code for my IDE and Copilot AI (letting it ch
 <b>Hardware</b>
 This project was initially designed on an Adafruit TFT Touchscreen FeatherWing. I later redesigned it to run on generic TFT touchscreens from Amazon for cost/size considerations. This code is written for those screens.
 - Feather RP2350 (Developed with +PSRAM version but will optimize memory to use non-PSRAM version)
-- 320x240 TFT touchscreen - 3.2" using ILI9341 SPI and XPT2046 touch controller (Amazon), also with an SD card slot. This display is available in several different sizes but is essentially pin-compatible.
+- 320x240 TFT touchscreen - 3.2" using ILI9341 SPI and XPT2046 touch controller (Amazon), also with an SD card slot. This display is available in several different sizes but is essentially pin-compatible between the different sizes available.
 - DS3231 real time clock module connected via I2C (there is a switch in the code to use a PCF8523 RTC module)
 - Piezo buzzer
 - SD (or microSD with an adapter) card
