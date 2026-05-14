@@ -27,12 +27,6 @@ try:
 	from adapters import DisplayIORendererAdapter, FilePersistenceAdapter, TouchInputAdapter
 except ImportError:
 	print("Warning: Some imports failed. If you're running this on a host machine for testing, this is expected. If you're running on the target hardware, please check that all necessary libraries are included.")
-	# import sys
-	# if "/NewMathGame20260512" not in sys.path:
-	# 	sys.path.append("/NewMathGame20260512")
-	# import logic_core
-	# import game_engine
-	# from adapters import DisplayIORendererAdapter, FilePersistenceAdapter, TouchInputAdapter
 from adafruit_bitmap_font import bitmap_font
 from adafruit_display_text import label
 from adafruit_displayio_layout.layouts.page_layout import PageLayout
@@ -489,19 +483,9 @@ DEFAULT_RTC_DATETIME = time.struct_time((2026, 1, 1, 12, 0, 0, 3, -1, -1))
 system_rtc = rtc.RTC()
 crt = None
 buzzer_tx = None
-buzzer_rx_hold = None
 buzzer_pattern = ()
 buzzer_pattern_index = 0
 buzzer_step_deadline = 0.0
-
-try:
-	buzzer_rx_hold = digitalio.DigitalInOut(board.RX)
-	buzzer_rx_hold.direction = digitalio.Direction.OUTPUT
-	buzzer_rx_hold.value = False
-	print("Buzzer RX held low")
-
-except Exception as exc:
-	print("Buzzer RX low-output init failed:", exc)
 
 try:
 	buzzer_tx = pwmio.PWMOut(board.TX, duty_cycle=0, frequency=BUZZER_STARTUP_FREQUENCY, variable_frequency=True)
@@ -571,8 +555,6 @@ def stop_buzzer():
 	global buzzer_pattern, buzzer_pattern_index, buzzer_step_deadline
 	if buzzer_tx is not None:
 		buzzer_tx.duty_cycle = 0
-	if buzzer_rx_hold is not None:
-		buzzer_rx_hold.value = False
 	buzzer_pattern = ()
 	buzzer_pattern_index = 0
 	buzzer_step_deadline = 0.0
@@ -583,8 +565,6 @@ def start_buzzer_tone(frequency):
 		return False
 
 	buzzer_tx.frequency = frequency
-	if buzzer_rx_hold is not None:
-		buzzer_rx_hold.value = False
 	buzzer_tx.duty_cycle = BUZZER_DUTY_CYCLE
 	return True
 
