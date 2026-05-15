@@ -8,7 +8,7 @@ Written in CircuitPython, I use VS Code as my IDE and Copilot AI (letting it cho
 
 <b>Hardware</b>
 This project was initially designed on an Adafruit TFT Touchscreen FeatherWing. I later redesigned it to run on generic TFT touchscreens from Amazon for cost and size considerations. This code is written for those screens.
-- Feather RP2350 (developed with the +PSRAM version, but I plan to optimize memory usage for the non-PSRAM version)
+- Feather RP2350 (developed with the +PSRAM version, but memory usage has been optimized and the current code runs successfully on the non-PSRAM version)
 - 320x240 TFT touchscreen - 3.2" using ILI9341 SPI and XPT2046 touch controller (Amazon), also with an SD card slot. This display is available in several different sizes but is essentially pin-compatible between the different sizes available.
 - DS3231 real-time clock module connected via I2C (there is a switch in the code to use a PCF8523 RTC module)
 - Piezo buzzer
@@ -25,7 +25,7 @@ For each problem, the player must answer correctly. If they are incorrect, they 
 
 In addition to the three problem types, I added "Mixed," which pulls from all question banks. Players have a choice of 10, 20, 35, or 50 questions.
 
-Although we start with two pre-programmed names (stored in text files on the SD card), there is functionality to add additional names so everyone can have their own scores. For this, we created an on-screen keyboard arranged as a 4x4 grid. The top row has buttons for "LAST" [page], "BkSp", "ENTER", and "NEXT" [page]. The second row has the vowels A, E, I, and O. These top two rows are constant. The consonants, U, and a space (underscore) are arranged on three pages. With this layout, it is efficient to enter names without a lot of paging.
+Although we start with two pre-programmed names (stored in text files on the SD card), there is functionality to add additional names directly during gameplay so everyone can have their own scores. For this, we created an on-screen keyboard arranged as a 4x4 grid. The top row has buttons for "LAST" [page], "BkSp", "ENTER", and "NEXT" [page]. The second row has the vowels A, E, I, and O. These top two rows are constant. The consonants, U, and a space (underscore) are arranged on three pages. With this layout, it is efficient to enter names without a lot of paging.
 
 Note that there is also a <i>secret</i> reset process to zero out the high scores and the game/problem counts. I added this so players would not get discouraged after the game fills up with high scores. If you choose "NEW" to create a new name and enter the name "RESET", the scores.txt file will be archived on the SD card with a date/time stamp, and the players.txt file will be replaced with the tplayers.txt file.
 
