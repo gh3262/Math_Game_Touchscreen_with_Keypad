@@ -17,6 +17,7 @@ import storage
 import displayio
 import fourwire
 import os
+import json
 import adafruit_ili9341
 import sdcardio
 import random
@@ -135,6 +136,19 @@ POINTS_PER_MC_PROBLEM = 0.01
 POINTS_PER_KB_PROBLEM = 0.025
 POINTS_PER_TT_PROBLEM = 0.02
 TT_SCOPE = 12
+# Load reusable banks from the OS root first; use the SD copy as a read fallback.
+PROBLEM_BANK_DIR_CANDIDATES = ("/problem_banks", "/sd/problem_banks")
+PROBLEM_BANK_WRITE_DIR = "/sd/problem_banks"
+PROBLEM_BANK_FILE_MAP = {
+	"addition": "addition_pairs_v2.jsonl",
+	"subtraction": "subtraction_pairs_v2.jsonl",
+	"multiplication": "multiplication_pairs_v2.jsonl",
+}
+PROBLEM_BANK_OPERATOR_MAP = {
+	"addition": "+",
+	"subtraction": "-",
+	"multiplication": "*",
+}
 
 # Named color palette for all game UI elements.
 UI_COLORS = {
@@ -293,12 +307,16 @@ def mount_sd_with_retries():
 	return False, last_error
 
 
-def build_problem(a, b, operator):
-	return logic_core.build_problem(a, b, operator)
+def build_problem(a, b, operator, deterministic=False):
+	return logic_core.build_problem(a, b, operator, deterministic=deterministic)
 
 
-def build_problem_set(operator, count=None):
-	return logic_core.build_problem_set(operator, count)
+def build_problem_set(operator, count=None, deterministic=False):
+	return logic_core.build_problem_set(operator, count, deterministic=deterministic)
+
+
+def build_problem_pair_set(operator, count=None):
+	return logic_core.build_problem_pair_set(operator, count)
 
 
 def tag_problem_set(problem_set, operator_symbol):
@@ -312,6 +330,146 @@ def build_tt_problem_set(table_number, scope):
 		# Keep tuple shape consistent with normal problem sets.
 		problems.append((table_number, multiplier, correct_answer, correct_answer + 1, correct_answer + 2, correct_answer + 3))
 	return problems
+
+
+def ensure_problem_bank_write_directory():
+	try:
+		if "sd" not in os.listdir("/"):
+			return ""
+	except OSError:
+		return ""
+
+	try:
+		if "problem_banks" in os.listdir("/sd"):
+			return PROBLEM_BANK_WRITE_DIR
+	except OSError:
+		return ""
+
+	try:
+		os.mkdir(PROBLEM_BANK_WRITE_DIR)
+		return PROBLEM_BANK_WRITE_DIR
+	except OSError:
+		return ""
+
+
+def existing_problem_bank_path(bank_name):
+	file_name = PROBLEM_BANK_FILE_MAP.get(bank_name)
+	if not file_name:
+		return ""
+	for dir_path in PROBLEM_BANK_DIR_CANDIDATES:
+		candidate_path = "{}/{}".format(dir_path, file_name)
+		if first_existing_file_path((candidate_path,)):
+			return candidate_path
+	return ""
+
+
+def default_problem_bank_path(bank_name):
+	file_name = PROBLEM_BANK_FILE_MAP.get(bank_name)
+	if not file_name:
+		return ""
+	dir_path = ensure_problem_bank_write_directory()
+	if not dir_path:
+		return ""
+	return "{}/{}".format(dir_path, file_name)
+
+
+def parse_problem_bank_line(line):
+	try:
+		problem = json.loads(line)
+	except ValueError:
+		return None
+	if not isinstance(problem, list):
+		return None
+	if len(problem) == 2:
+		if isinstance(problem[0], int) and isinstance(problem[1], int):
+			return (problem[0], problem[1])
+		return None
+	# Legacy support: full problem tuples can still be read by taking operand pairs.
+	if len(problem) == 6:
+		for value in problem:
+			if not isinstance(value, int):
+				return None
+		return (problem[0], problem[1])
+	return None
+
+
+def load_problem_bank_file(file_path):
+	pairs = []
+	with open_text_read(file_path) as source_file:
+		for raw_line in source_file:
+			line = raw_line.strip()
+			if not line:
+				continue
+			pair = parse_problem_bank_line(line)
+			if pair is None:
+				return None
+			pairs.append(pair)
+	return pairs
+
+
+def save_problem_bank_file(file_path, pairs):
+	with open_text_write(file_path) as target_file:
+		for pair in pairs:
+			target_file.write(json.dumps(pair))
+			target_file.write("\n")
+
+
+def expected_problem_bank_size(bank_name):
+	operator_symbol = PROBLEM_BANK_OPERATOR_MAP.get(bank_name)
+	if not operator_symbol:
+		return 0
+	return logic_core.problem_pool_size(operator_symbol)
+
+
+def build_problem_bank(bank_name):
+	operator_symbol = PROBLEM_BANK_OPERATOR_MAP.get(bank_name)
+	if not operator_symbol:
+		return []
+	return build_problem_pair_set(operator_symbol)
+
+
+def load_problem_bank(bank_name):
+	global loaded_problem_bank_name, loaded_problem_bank_data
+	if loaded_problem_bank_name == bank_name and loaded_problem_bank_data is not None:
+		return loaded_problem_bank_data
+
+	expected_size = expected_problem_bank_size(bank_name)
+	loaded_data = None
+
+	file_path = existing_problem_bank_path(bank_name)
+	if file_path:
+		try:
+			loaded_data = load_problem_bank_file(file_path)
+		except OSError:
+			loaded_data = None
+		if loaded_data is not None and expected_size and len(loaded_data) != expected_size:
+			loaded_data = None
+
+	# Bank auto-generation is disabled; banks must exist in /problem_banks
+	# (or /sd/problem_banks as backup) before gameplay starts.
+	if loaded_data is None:
+		loaded_data = []
+		print("Missing problem bank:", bank_name)
+
+	loaded_problem_bank_name = bank_name
+	loaded_problem_bank_data = loaded_data
+	gc.collect()
+	return loaded_problem_bank_data
+
+
+def random_tagged_subset_from_bank(bank_name, count):
+	problem_pairs = load_problem_bank(bank_name)
+	operator_symbol = PROBLEM_BANK_OPERATOR_MAP.get(bank_name, "")
+	if not operator_symbol:
+		return []
+	selected_pairs = random_subset_from_pool(problem_pairs, count)
+	selected = []
+	for pair in selected_pairs:
+		selected.append(build_problem(pair[0], pair[1], operator_symbol))
+	tagged_selected = []
+	for problem in selected:
+		tagged_selected.append(problem + (operator_symbol,))
+	return tagged_selected
 
 def touch_to_pixel(raw_x, raw_y):
 	"""Map normalized XPT2046 coordinates to display pixels."""
@@ -627,13 +785,8 @@ def play_buzzer_tone(frequency, duration):
 
 
 set_status_led(LED_COLOR_RED)
-
-addition = build_problem_set("+")
-multiplication = build_problem_set("*")
-subtraction = build_problem_set("-")
-addition_mixed = tag_problem_set(addition, "+")
-subtraction_mixed = tag_problem_set(subtraction, "-")
-multiplication_mixed = tag_problem_set(multiplication, "*")
+loaded_problem_bank_name = ""
+loaded_problem_bank_data = None
 
 # Full-screen background.
 game_page_group.append(make_rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_BACKGROUND))
@@ -683,7 +836,7 @@ game_kb_entry_label = label.Label(
 	color=COLOR_RESULT_TEXT,
 )
 game_kb_entry_label.anchor_point = (0.5, 0.5)
-game_kb_entry_label.anchored_position = ((SCREEN_WIDTH * 2) // 3, 61)
+game_kb_entry_label.anchored_position = (((SCREEN_WIDTH * 2) // 3) + 5, 61)
 game_kb_page_group.append(game_kb_entry_label)
 
 result_label = label.Label(
@@ -2634,6 +2787,12 @@ def clear_kb_entry():
 	refresh_kb_entry_label()
 
 
+def clear_game_kb_prompt_labels():
+	set_label_text_if_changed(game_kb_question_label, "")
+	set_label_text_if_changed(game_kb_result_label, "")
+	set_label_text_if_changed(game_kb_entry_label, "")
+
+
 def append_kb_digit(digit_text):
 	global kb_answer_text
 	max_digits = KB_ENTRY_MAX_DIGITS
@@ -2769,6 +2928,8 @@ def end_game(message="Game Over"):
 def start_game():
 	global game_started, current_problem_position, mode_select_active, selecting_problem_count, active_questions, tt_selected_number
 	if current_entry_type in ("Keys", "TT"):
+		if current_entry_type == "TT" and tt_selected_number is None:
+			clear_game_kb_prompt_labels()
 		show_game_kb_page()
 	else:
 		show_game_page()
@@ -2779,17 +2940,27 @@ def start_game():
 		active_questions = []
 	if current_game_type == "Mixed":
 		selected_questions = []
-		max_mixed_questions = len(addition_mixed) + len(subtraction_mixed) + len(multiplication_mixed)
+		max_mixed_questions = (
+			expected_problem_bank_size("addition")
+			+ expected_problem_bank_size("subtraction")
+			+ expected_problem_bank_size("multiplication")
+		)
 		mixed_count = min(problem_count_target, max_mixed_questions)
 		base_count = mixed_count // 3
 		extra_count = mixed_count % 3
-		category_specs = (addition_mixed, subtraction_mixed, multiplication_mixed)
+		category_specs = ("addition", "subtraction", "multiplication")
 		for i in range(len(category_specs)):
 			take_count = base_count
 			if i < extra_count:
 				take_count += 1
-			selected_questions.extend(random_subset_from_pool(category_specs[i], take_count))
+			selected_questions.extend(random_tagged_subset_from_bank(category_specs[i], take_count))
 		shuffle_in_place(selected_questions)
+		active_questions = selected_questions
+	elif current_entry_type != "TT":
+		selected_pairs = random_subset_from_pool(active_questions, problem_count_target)
+		selected_questions = []
+		for pair in selected_pairs:
+			selected_questions.append(build_problem(pair[0], pair[1], current_operator_symbol))
 		active_questions = selected_questions
 
 	if current_entry_type != "TT" and not active_questions:
@@ -2926,11 +3097,11 @@ def choose_problem_type(choice_text):
 
 	question_bank = selection["question_bank"]
 	if question_bank == "addition":
-		active_questions = addition
+		active_questions = load_problem_bank("addition")
 	elif question_bank == "subtraction":
-		active_questions = subtraction
+		active_questions = load_problem_bank("subtraction")
 	elif question_bank == "multiplication":
-		active_questions = multiplication
+		active_questions = load_problem_bank("multiplication")
 	else:
 		active_questions = []
 
@@ -3176,7 +3347,7 @@ def handle_mode_select_answer_intent(intent, choice_text):
 		debug_helper_transition("mode_select answer -> choose entry type {}".format(choice_text))
 		current_entry_type = choice_text
 		if choice_text == "TT":
-			active_questions = multiplication
+			active_questions = []
 			current_operator_symbol = "*"
 			current_game_type = "Multiplication"
 			selecting_entry_type = False
@@ -3390,7 +3561,7 @@ mode_select_active = False
 selecting_entry_type = False
 selecting_problem_count = False
 selecting_score_name = False
-active_questions = addition
+active_questions = []
 current_operator_symbol = "+"
 current_game_type = "Addition"
 current_entry_type = "Choice"

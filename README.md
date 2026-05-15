@@ -31,6 +31,28 @@ Note that there is also a <i>secret</i> reset process to zero out the high score
 
 The keypad entry page is a similar 4x3 grid with buttons for 1, 2, 3, BkSp; 4, 5, 6, Enter; 7, 8, 9, 0. Because the screen is wider than tall, I thought this would be a better arrangement than a traditional 3x4 layout.
 
+<b>One-Time Migration Checklist (Question Banks)</b>
+
+Use this only when moving from older bank files to the current pair-format banks.
+
+1. Confirm these three files exist:
+	- /problem_banks/addition_pairs_v2.jsonl
+	- /problem_banks/subtraction_pairs_v2.jsonl
+	- /problem_banks/multiplication_pairs_v2.jsonl
+2. Keep backup copies on SD as well:
+	- /sd/problem_banks/addition_pairs_v2.jsonl
+	- /sd/problem_banks/subtraction_pairs_v2.jsonl
+	- /sd/problem_banks/multiplication_pairs_v2.jsonl
+3. Deploy the latest code.py, logic_core.py, game_engine.py, and adapters.py to CIRCUITPY.
+4. Boot once and start each mode (Add, Subtract, Multiply, Mixed) to confirm banks load correctly.
+5. If any bank is missing, regenerate using the steps in "Regenerating Question Banks" below, then copy the rebuilt files to /problem_banks.
+
+Expected console messages (question bank troubleshooting):
+
+- Normal (banks found): no bank error is printed when entering Add/Subtract/Multiply/Mixed.
+- Missing bank file: Missing problem bank: addition (or subtraction/multiplication)
+- If a bank is missing, that mode may show No problems until the missing file is restored.
+
 <b>Scoring:</b> At the end of each game, the player sees several screens. The first screen is their score for the game. It shows the number of problems, number skipped, and number wrong. They are given an accuracy score and an average time per question. The program also calculates a composite score weighted 70% accuracy / 30% time (weightings can be adjusted at the top of the program). If they achieve a high score for the category (or tie), the screen will indicate it. The Next button moves to the Ranking screen, showing the player's ranking in each category (and who has the high score in the category). The next page shows the top ten scores in the category, including the name and date/time achieved. Next returns to the Start screen, and the player can bypass these screens and start a new game at any time with the Start button.
 
 When on the Start screen, before a game is started, clicking the Next button cycles through the four Top Ten score pages for each category. The fifth and sixth pages list each player, the number of games/problems recorded, and a calculated point total. Points are given as 0.01 per multiple-choice question, 0.025 per keypad-entry answer, and 0.02 per TT question. Point values are set at the top of the program.
@@ -68,6 +90,23 @@ Runtime architecture summary:
 - logic_core.py computes math content and score values.
 - adapters.py isolates hardware/file access details for cleaner main flow.
 
+<b>Question Bank Format (Current)</b>
+
+To reduce RAM pressure, reusable question banks now store only operand pairs, not full four-choice tuples.
+
+- File format: JSON Lines where each line is a two-item integer array, for example [7, 12].
+- Current bank files:
+	- problem_banks/addition_pairs_v2.jsonl
+	- problem_banks/subtraction_pairs_v2.jsonl
+	- problem_banks/multiplication_pairs_v2.jsonl
+- Runtime load order:
+	1. /problem_banks on CIRCUITPY root (primary)
+	2. /sd/problem_banks on SD card (backup)
+- Runtime behavior:
+	- The game loads operand pairs from the bank file.
+	- For selected questions, it rebuilds the full problem tuple in memory.
+	- Multiple-choice button order and question order still randomize during play.
+
 <b>Quick Start</b>
 
 1. Install CircuitPython on your Feather RP2350.
@@ -80,11 +119,32 @@ Runtime architecture summary:
 	- settings.toml
 	- lib/ (required libraries)
 	- fonts/ (font assets)
-4. Insert an SD or microSD card and ensure the data files are available:
+4. Copy the prebuilt question banks to CIRCUITPY root in a folder named problem_banks:
+	- problem_banks/addition_pairs_v2.jsonl
+	- problem_banks/subtraction_pairs_v2.jsonl
+	- problem_banks/multiplication_pairs_v2.jsonl
+5. Insert an SD or microSD card and ensure the data files are available:
 	- files/players.txt
 	- files/scores.txt
 	- files/tplayers.txt
-5. Reset the board and verify the title screen appears.
+6. Reset the board and verify the title screen appears.
+
+<b>Regenerating Question Banks</b>
+
+Only do this when you intentionally need to rebuild the pair-format bank files.
+
+1. Temporarily enable auto-generation in code.py:
+	- In load_problem_bank(), replace the missing-bank branch that currently sets loaded_data = [] with the generate-and-save block.
+	- The generate-and-save block should call build_problem_bank(bank_name), then save_problem_bank_file(default_problem_bank_path(bank_name), loaded_data).
+2. Remove or rename old pair-format files from /sd/problem_banks so generation runs.
+3. Boot the board with SD inserted and enter each mode (Add/Subtract/Multiply) once to trigger bank creation.
+4. Confirm these files exist on SD:
+	- /sd/problem_banks/addition_pairs_v2.jsonl
+	- /sd/problem_banks/subtraction_pairs_v2.jsonl
+	- /sd/problem_banks/multiplication_pairs_v2.jsonl
+5. Copy those files to CIRCUITPY root /problem_banks.
+6. Re-disable auto-generation in code.py (restore the current missing-bank behavior).
+7. Reboot and verify normal gameplay.
 
 <b>Wiring / Pin Map (Current Code)</b>
 
@@ -128,5 +188,7 @@ Typical edit/test loop used during development:
 1. Edit files in VS Code.
 2. Copy updated runtime files to CIRCUITPY, for example in PowerShell:
 	Copy-Item -Path .\code.py, .\adapters.py, .\game_engine.py, .\logic_core.py -Destination D:\ -Force
-3. The board reloads code.py automatically after copy.
-4. Test on device and review serial console output for debug and memory feedback.
+3. If question-bank files were updated, also copy the problem_banks folder contents:
+	Copy-Item -Path .\problem_banks\*.jsonl -Destination D:\problem_banks\ -Force
+4. The board reloads code.py automatically after copy.
+5. Test on device and review serial console output for debug and memory feedback.

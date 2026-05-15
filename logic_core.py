@@ -6,7 +6,7 @@ PROBLEM_OPERAND_MIN = 0
 PROBLEM_OPERAND_MAX = 12
 
 
-def build_problem(a, b, operator):
+def build_problem(a, b, operator, deterministic=False):
     if operator == "+":
         answer = a + b
     elif operator == "-":
@@ -23,9 +23,10 @@ def build_problem(a, b, operator):
     for offset in offsets:
         candidates.append(answer + offset)
         candidates.append(answer - offset)
-    for i in range(len(candidates) - 1, 0, -1):
-        j = random.randrange(i + 1)
-        candidates[i], candidates[j] = candidates[j], candidates[i]
+    if not deterministic:
+        for i in range(len(candidates) - 1, 0, -1):
+            j = random.randrange(i + 1)
+            candidates[i], candidates[j] = candidates[j], candidates[i]
 
     choices = [answer]
     for candidate in candidates:
@@ -55,7 +56,7 @@ def problem_pool_size(operator, min_operand=None, max_operand=None):
     return span * span
 
 
-def build_problem_set(operator, count=None, min_operand=None, max_operand=None):
+def build_problem_pair_set(operator, count=None, min_operand=None, max_operand=None):
     min_operand, max_operand = _operand_range(min_operand, max_operand)
     pairs = []
     if operator == "-":
@@ -69,10 +70,15 @@ def build_problem_set(operator, count=None, min_operand=None, max_operand=None):
 
     if count is None or count > len(pairs):
         count = len(pairs)
+    return pairs[:count]
+
+
+def build_problem_set(operator, count=None, min_operand=None, max_operand=None, deterministic=False):
+    pairs = build_problem_pair_set(operator, count=count, min_operand=min_operand, max_operand=max_operand)
 
     problems = []
-    for pair in pairs[:count]:
-        problems.append(build_problem(pair[0], pair[1], operator))
+    for pair in pairs:
+        problems.append(build_problem(pair[0], pair[1], operator, deterministic=deterministic))
     return problems
 
 
